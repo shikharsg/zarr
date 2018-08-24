@@ -41,6 +41,9 @@ class Group(MutableMapping):
         to all attribute read operations.
     synchronizer : object, optional
         Array synchronizer.
+    encode_decode_by_store: bool, optional
+        To be used with a True value along with LRUStoreCache, so that the store
+        can cache decoded values
 
     Attributes
     ----------
@@ -90,7 +93,7 @@ class Group(MutableMapping):
     """
 
     def __init__(self, store, path=None, read_only=False, chunk_store=None,
-                 cache_attrs=True, synchronizer=None):
+                 cache_attrs=True, synchronizer=None, encode_decode_by_store=False):
 
         self._store = store
         self._chunk_store = chunk_store
@@ -101,6 +104,8 @@ class Group(MutableMapping):
             self._key_prefix = ''
         self._read_only = read_only
         self._synchronizer = synchronizer
+        self._encode_decode_by_store = encode_decode_by_store
+
 
         # guard conditions
         if contains_array(store, path=self._path):
@@ -325,7 +330,8 @@ class Group(MutableMapping):
         if contains_array(self._store, path):
             return Array(self._store, read_only=self._read_only, path=path,
                          chunk_store=self._chunk_store,
-                         synchronizer=self._synchronizer, cache_attrs=self.attrs.cache)
+                         synchronizer=self._synchronizer, cache_attrs=self.attrs.cache,
+                         encode_decode_by_store=self._encode_decode_by_store)
         elif contains_group(self._store, path):
             return Group(self._store, read_only=self._read_only, path=path,
                          chunk_store=self._chunk_store, cache_attrs=self.attrs.cache,
@@ -455,7 +461,8 @@ class Group(MutableMapping):
                 yield key, Array(self._store, path=path, read_only=self._read_only,
                                  chunk_store=self._chunk_store,
                                  cache_attrs=self.attrs.cache,
-                                 synchronizer=self._synchronizer)
+                                 synchronizer=self._synchronizer,
+                                 encode_decode_by_store=self._encode_decode_by_store)
 
     def visitvalues(self, func):
         """Run ``func`` on each object.
@@ -749,6 +756,9 @@ class Group(MutableMapping):
             lifetime of the object. If False, array metadata will be reloaded
             prior to all data access and modification operations (may incur
             overhead depending on storage and data access pattern).
+        encode_decode_by_store: bool, optional
+            To be used with a True value along with LRUStoreCache, so that the
+            store can cache decoded values
 
         Returns
         -------
@@ -825,7 +835,8 @@ class Group(MutableMapping):
             cache_attrs = kwargs.get('cache_attrs', self.attrs.cache)
             a = Array(self._store, path=path, read_only=self._read_only,
                       chunk_store=self._chunk_store, synchronizer=synchronizer,
-                      cache_metadata=cache_metadata, cache_attrs=cache_attrs)
+                      cache_metadata=cache_metadata, cache_attrs=cache_attrs,
+                      encode_decode_by_store=self._encode_decode_by_store)
             shape = normalize_shape(shape)
             if shape != a.shape:
                 raise TypeError('shape do not match existing array; expected {}, got {}'

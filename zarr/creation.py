@@ -17,7 +17,7 @@ def create(shape, chunks=True, dtype=None, compressor='default',
            fill_value=0, order='C', store=None, synchronizer=None,
            overwrite=False, path=None, chunk_store=None, filters=None,
            cache_metadata=True, cache_attrs=True, read_only=False,
-           object_codec=None, **kwargs):
+           object_codec=None, encode_decode_by_store=False, **kwargs):
     """Create an array.
 
     Parameters
@@ -62,6 +62,9 @@ def create(shape, chunks=True, dtype=None, compressor='default',
         True if array should be protected against modification.
     object_codec : Codec, optional
         A codec to encode object arrays, only needed if dtype=object.
+    encode_decode_by_store: bool, optional
+        To be used with a True value along with LRUStoreCache, so that the store
+        can cache decoded values
 
     Returns
     -------
@@ -120,7 +123,8 @@ def create(shape, chunks=True, dtype=None, compressor='default',
 
     # instantiate array
     z = Array(store, path=path, chunk_store=chunk_store, synchronizer=synchronizer,
-              cache_metadata=cache_metadata, cache_attrs=cache_attrs, read_only=read_only)
+              cache_metadata=cache_metadata, cache_attrs=cache_attrs, read_only=read_only,
+              encode_decode_by_store=encode_decode_by_store)
 
     return z
 
@@ -349,7 +353,7 @@ def array(data, **kwargs):
 def open_array(store, mode='a', shape=None, chunks=True, dtype=None, compressor='default',
                fill_value=0, order='C', synchronizer=None, filters=None,
                cache_metadata=True, cache_attrs=True, path=None, object_codec=None,
-               **kwargs):
+               encode_decode_by_store=False, **kwargs):
     """Open an array using file-mode-like semantics.
 
     Parameters
@@ -391,6 +395,9 @@ def open_array(store, mode='a', shape=None, chunks=True, dtype=None, compressor=
         Array path within store.
     object_codec : Codec, optional
         A codec to encode object arrays, only needed if dtype=object.
+    encode_decode_by_store: bool, optional
+        To be used with a True value along with LRUStoreCache, so that the store
+        can cache decoded values
 
     Returns
     -------
@@ -475,7 +482,8 @@ def open_array(store, mode='a', shape=None, chunks=True, dtype=None, compressor=
 
     # instantiate array
     z = Array(store, read_only=read_only, synchronizer=synchronizer,
-              cache_metadata=cache_metadata, cache_attrs=cache_attrs, path=path)
+              cache_metadata=cache_metadata, cache_attrs=cache_attrs, path=path,
+              encode_decode_by_store=encode_decode_by_store)
 
     return z
 

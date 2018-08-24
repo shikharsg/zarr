@@ -103,7 +103,8 @@ class Array(object):
     """
 
     def __init__(self, store, path=None, read_only=False, chunk_store=None,
-                 synchronizer=None, cache_metadata=True, cache_attrs=True):
+                 synchronizer=None, cache_metadata=True, cache_attrs=True,
+                 encode_decode_by_store=False):
         # N.B., expect at this point store is fully initialized with all
         # configuration metadata fully specified and normalized
 
@@ -118,6 +119,7 @@ class Array(object):
         self._synchronizer = synchronizer
         self._cache_metadata = cache_metadata
         self._is_view = False
+        self._encode_decode_by_store = encode_decode_by_store
 
         # initialize metadata
         self._load_metadata()
@@ -1593,7 +1595,7 @@ class Array(object):
                     # contiguous, so we can decompress directly from the chunk
                     # into the destination array
 
-                    if self._compressor:
+                    if self._compressor and not self._encode_decode_by_store:
                         self._compressor.decode(cdata, dest)
                     else:
                         if isinstance(cdata, np.ndarray):
@@ -1726,7 +1728,7 @@ class Array(object):
     def _decode_chunk(self, cdata):
 
         # decompress
-        if self._compressor:
+        if self._compressor and not self._encode_decode_by_store:
             chunk = self._compressor.decode(cdata)
         else:
             chunk = cdata
@@ -1764,7 +1766,7 @@ class Array(object):
             raise RuntimeError('cannot write object array without object codec')
 
         # compress
-        if self._compressor:
+        if self._compressor and not self._encode_decode_by_store:
             cdata = self._compressor.encode(chunk)
         else:
             cdata = chunk
@@ -2088,7 +2090,7 @@ class Array(object):
 
     def view(self, shape=None, chunks=None, dtype=None,
              fill_value=None, filters=None, read_only=None,
-             synchronizer=None):
+             synchronizer=None, encode_decode_by_store=False):
         """Return an array sharing the same data.
 
         Parameters
@@ -2108,6 +2110,9 @@ class Array(object):
             True if array should be protected against modification.
         synchronizer : object, optional
             Array synchronizer.
+        encode_decode_by_store: bool, optional
+            To be used with a True value along with LRUStoreCache, so that the
+            store can cache decoded values
 
         Notes
         -----
@@ -2204,7 +2209,8 @@ class Array(object):
         if synchronizer is None:
             synchronizer = self._synchronizer
         a = Array(store=store, path=path, chunk_store=chunk_store, read_only=read_only,
-                  synchronizer=synchronizer, cache_metadata=True)
+                  synchronizer=synchronizer, cache_metadata=True,
+                  encode_decode_by_store=encode_decode_by_store)
         a._is_view = True
 
         # allow override of some properties
