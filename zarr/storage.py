@@ -1740,7 +1740,7 @@ class LRUStoreCache(MutableMapping):
 
     """
 
-    def __init__(self, store, max_size):
+    def __init__(self, store, max_size, compressor=None):
         self._store = store
         self._max_size = max_size
         self._current_size = 0
@@ -1749,6 +1749,7 @@ class LRUStoreCache(MutableMapping):
         self._listdir_cache = dict()
         self._values_cache = OrderedDict()
         self._mutex = Lock()
+        self._compressor = compressor
         self.hits = self.misses = 0
 
     def __getstate__(self):
@@ -1862,6 +1863,8 @@ class LRUStoreCache(MutableMapping):
         except KeyError:
             # cache miss, retrieve value from the store
             value = self._store[key]
+            if self._compressor:
+                value = self._compressor.decode(value)
             with self._mutex:
                 self.misses += 1
                 # need to check if key is not in the cache, as it may have been cached
@@ -1872,7 +1875,11 @@ class LRUStoreCache(MutableMapping):
         return value
 
     def __setitem__(self, key, value):
-        self._store[key] = value
+        if self._compressor:
+            cdata = self._compressor.encode(value)
+            self._store[key] = cdata
+        else:
+            self._store[key] = value
         with self._mutex:
             self._invalidate_keys()
             self._invalidate_value(key)
