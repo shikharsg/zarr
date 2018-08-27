@@ -5,6 +5,7 @@ import operator
 import itertools
 import hashlib
 import re
+import copy
 
 
 import numpy as np
@@ -125,8 +126,12 @@ class Array(object):
         self._load_metadata()
 
         if self._encode_decode_by_store and chunk_store is None:
-            raise ValueError('Chunk store has to be provided separately for encode_decode_by_store')
-        if self._encode_decode_by_store and not hasattr(self._chunk_store, 'does_decode'):
+            if hasattr(self._store, 'does_decode'):
+                self._chunk_store = copy.deepcopy(self._store)
+                self._chunk_store.set_compressor(self._compressor)
+            else:
+                raise ValueError('Chunk store has to be provided separately for encode_decode_by_store')
+        elif self._encode_decode_by_store and not hasattr(self._chunk_store, 'does_decode'):
             raise ValueError('Underlying store does not support compression')
         else:
             self._chunk_store.set_compressor(self._compressor)
