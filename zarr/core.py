@@ -2095,7 +2095,7 @@ class Array(object):
 
     def view(self, shape=None, chunks=None, dtype=None,
              fill_value=None, filters=None, read_only=None,
-             synchronizer=None, encode_decode_by_store=False):
+             synchronizer=None):
         """Return an array sharing the same data.
 
         Parameters
@@ -2115,9 +2115,6 @@ class Array(object):
             True if array should be protected against modification.
         synchronizer : object, optional
             Array synchronizer.
-        encode_decode_by_store: bool, optional
-            To be used with a True value along with LRUStoreCache, so that the
-            store can cache decoded values
 
         Notes
         -----
@@ -2215,7 +2212,7 @@ class Array(object):
             synchronizer = self._synchronizer
         a = Array(store=store, path=path, chunk_store=chunk_store, read_only=read_only,
                   synchronizer=synchronizer, cache_metadata=True,
-                  encode_decode_by_store=encode_decode_by_store)
+                  encode_decode_by_store=self._encode_decode_by_store)
         a._is_view = True
 
         # allow override of some properties
