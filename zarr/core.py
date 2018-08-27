@@ -124,6 +124,11 @@ class Array(object):
         # initialize metadata
         self._load_metadata()
 
+        if self._encode_decode_by_store and not hasattr(self._chunk_store, 'does_decode'):
+            raise ValueError('Underlying store does not support compression')
+        else:
+            self._chunk_store.set_compressor(self._compressor)
+
         # initialize attributes
         akey = self._key_prefix + attrs_key
         self._attrs = Attributes(store, key=akey, read_only=read_only,

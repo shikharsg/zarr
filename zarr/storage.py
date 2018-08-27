@@ -1740,7 +1740,9 @@ class LRUStoreCache(MutableMapping):
 
     """
 
-    def __init__(self, store, max_size, compressor=None):
+    does_decode = True
+
+    def __init__(self, store, max_size):
         self._store = store
         self._max_size = max_size
         self._current_size = 0
@@ -1749,8 +1751,11 @@ class LRUStoreCache(MutableMapping):
         self._listdir_cache = dict()
         self._values_cache = OrderedDict()
         self._mutex = Lock()
-        self._compressor = compressor
+        self._compressor = None
         self.hits = self.misses = 0
+
+    def set_compressor(self, compressor):
+        self._compressor = compressor
 
     def __getstate__(self):
         return (self._store, self._max_size, self._current_size, self._keys_cache,
