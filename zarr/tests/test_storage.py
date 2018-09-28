@@ -20,7 +20,8 @@ from zarr.storage import (init_array, array_meta_key, attrs_key, DictStore,
                           DirectoryStore, ZipStore, init_group, group_meta_key,
                           getsize, migrate_1to2, TempStore, atexit_rmtree,
                           NestedDirectoryStore, default_compressor, DBMStore,
-                          LMDBStore, atexit_rmglob, LRUStoreCache, ABSStore)
+                          LMDBStore, atexit_rmglob, LRUStoreCache, ABSStore,
+                          ChunkCache)
 from zarr.meta import (decode_array_metadata, encode_array_metadata, ZARR_FORMAT,
                        decode_group_metadata, encode_group_metadata)
 from zarr.compat import PY2
@@ -1070,6 +1071,195 @@ class TestLRUStoreCache(StoreTests, unittest.TestCase):
         assert 1 == store.counter['__contains__', 'foo']
         assert keys == sorted(store)
         assert 1 == store.counter['__iter__']
+
+
+class TestChunkCache(object):
+
+    class MockChunkCacheArray(object):
+
+        def __init__(self, chunk_cache, store):
+            self._chunk_cache = chunk_cache
+            self._store = store
+
+        def __setitem__(self, key, value):
+            self._store[key] = value
+            self._chunk_cache[key] = value
+
+        def __getitem__(self, item):
+            try:
+                return self._chunk_cache[item]
+            except KeyError:
+                value = self._store[item]
+                self._chunk_cache[item] = value
+                return value
+
+    def test_cache_values_no_max_size(self):
+
+        # setup store
+        store = CountingDict()
+        store['foo'] = b'xxx'
+        store['bar'] = b'yyy'
+        assert 0 == store.counter['__getitem__', 'foo']
+        assert 1 == store.counter['__setitem__', 'foo']
+        assert 0 == store.counter['__getitem__', 'bar']
+        assert 1 == store.counter['__setitem__', 'bar']
+
+        # setup cache
+        cache = ChunkCache(max_size=None)
+        assert 0 == cache.hits
+        assert 0 == cache.misses
+
+        # setup array with cache and store
+        z = self.MockChunkCacheArray(cache, store)
+
+        # test first __getitem__, cache miss
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 1 == store.counter['__setitem__', 'foo']
+        assert 0 == cache.hits
+        assert 1 == cache.misses
+
+        # test second __getitem__, cache hit
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 1 == store.counter['__setitem__', 'foo']
+        assert 1 == cache.hits
+        assert 1 == cache.misses
+
+        # test __setitem__, __getitem__
+        z['foo'] = b'zzz'
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 2 == store.counter['__setitem__', 'foo']
+        # should be a cache hit
+        assert b'zzz' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 2 == store.counter['__setitem__', 'foo']
+        assert 2 == cache.hits
+        assert 1 == cache.misses
+
+        # manually invalidate all cached values
+        cache.invalidate_values()
+        assert b'zzz' == z['foo']
+        assert 2 == store.counter['__getitem__', 'foo']
+        assert 2 == store.counter['__setitem__', 'foo']
+        cache.invalidate()
+        assert b'zzz' == z['foo']
+        assert 3 == store.counter['__getitem__', 'foo']
+        assert 2 == store.counter['__setitem__', 'foo']
+
+        # test __delitem__
+        del cache['foo']
+        with pytest.raises(KeyError):
+            # noinspection PyStatementEffect
+            cache['foo']
+
+        # verify other keys untouched
+        assert 0 == store.counter['__getitem__', 'bar']
+        assert 1 == store.counter['__setitem__', 'bar']
+
+    def test_cache_values_with_max_size(self):
+
+        # setup store
+        store = CountingDict()
+        store['foo'] = b'xxx'
+        store['bar'] = b'yyy'
+        assert 0 == store.counter['__getitem__', 'foo']
+        assert 0 == store.counter['__getitem__', 'bar']
+
+        # setup cache can only hold one item
+        cache = ChunkCache(max_size=5)
+        assert 0 == cache.hits
+        assert 0 == cache.misses
+
+        # setup array with cache and store
+        z = self.MockChunkCacheArray(cache, store)
+
+        # test first 'foo' __getitem__, cache miss
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 0 == cache.hits
+        assert 1 == cache.misses
+
+        # test second 'foo' __getitem__, cache hit
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 1 == cache.hits
+        assert 1 == cache.misses
+
+        # test first 'bar' __getitem__, cache miss
+        assert b'yyy' == z['bar']
+        assert 1 == store.counter['__getitem__', 'bar']
+        assert 1 == cache.hits
+        assert 2 == cache.misses
+
+        # test second 'bar' __getitem__, cache hit
+        assert b'yyy' == z['bar']
+        assert 1 == store.counter['__getitem__', 'bar']
+        assert 2 == cache.hits
+        assert 2 == cache.misses
+
+        # test 'foo' __getitem__, should have been evicted, cache miss
+        assert b'xxx' == z['foo']
+        assert 2 == store.counter['__getitem__', 'foo']
+        assert 2 == cache.hits
+        assert 3 == cache.misses
+
+        # test 'bar' __getitem__, should have been evicted, cache miss
+        assert b'yyy' == z['bar']
+        assert 2 == store.counter['__getitem__', 'bar']
+        assert 2 == cache.hits
+        assert 4 == cache.misses
+
+        # setup store
+        store = CountingDict()
+        store['foo'] = b'xxx'
+        store['bar'] = b'yyy'
+        assert 0 == store.counter['__getitem__', 'foo']
+        assert 0 == store.counter['__getitem__', 'bar']
+
+        # setup cache can hold 2 items
+        cache = ChunkCache(max_size=6)
+        assert 0 == cache.hits
+        assert 0 == cache.misses
+
+        # setup array with cache and store
+        z = self.MockChunkCacheArray(cache, store)
+
+        # test first 'foo' __getitem__, cache miss
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 0 == cache.hits
+        assert 1 == cache.misses
+
+        # test second 'foo' __getitem__, cache hit
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 1 == cache.hits
+        assert 1 == cache.misses
+
+        # test first 'bar' __getitem__, cache miss
+        assert b'yyy' == z['bar']
+        assert 1 == store.counter['__getitem__', 'bar']
+        assert 1 == cache.hits
+        assert 2 == cache.misses
+
+        # test second 'bar' __getitem__, cache hit
+        assert b'yyy' == z['bar']
+        assert 1 == store.counter['__getitem__', 'bar']
+        assert 2 == cache.hits
+        assert 2 == cache.misses
+
+        # test 'foo' __getitem__, should still be cached
+        assert b'xxx' == z['foo']
+        assert 1 == store.counter['__getitem__', 'foo']
+        assert 3 == cache.hits
+        assert 2 == cache.misses
+
+        # test 'bar' __getitem__, should still be cached
+        assert b'yyy' == z['bar']
+        assert 1 == store.counter['__getitem__', 'bar']
+        assert 4 == cache.hits
+        assert 2 == cache.misses
 
 
 def test_getsize():
