@@ -1899,6 +1899,72 @@ class LRUStoreCache(MutableMapping):
             self._invalidate_value(key)
 
 
+class LRUStoreMemcache(MutableMapping):
+
+    def __init__(self, store, **client_kwargs):
+        from pymemcache.client.base import Client
+        self._store = store
+        self._client = Client(**client_kwargs)
+        self._client_kwargs = client_kwargs
+        self.hits = self.misses = 0
+
+    def __getstate__(self):
+        return (self._store, self._client_kwargs, self.hits, self.misses)
+
+    def __setstate__(self, state):
+        from pymemcache.client.base import Client
+        self._store, self._client_kwargs, self.hits, self.misses = state
+        self._client = Client(**self._client_kwargs)
+
+    def __len__(self):
+        return len(self._keys())
+
+    def __iter__(self):
+        return self.keys()
+
+    def __contains__(self, key):
+        contains = self._client.get(key)
+        if contains is None:
+            return key in self._store
+        else:
+            return True
+
+    def clear(self):
+        self._store.clear()
+        self.invalidate()
+
+    def keys(self):
+        return iter(self._keys())
+
+    def _keys(self):
+        return self._store.keys()
+
+    def listdir(self, path=None):
+        return listdir(self._store, path)
+
+    def getsize(self, path=None):
+        return getsize(self._store, path=path)
+
+    def invalidate(self):
+        """Completely clear the cache."""
+        self._client.flush_all()
+
+    def __getitem__(self, key):
+        value = self._client.get(key)
+        if value is None:
+            value = self._store[key]
+            self._client.set(key, ensure_bytes(value))
+        return value
+
+    def __setitem__(self, key, value):
+        self._store[key] = value
+        self._client.set(key, ensure_bytes(value))
+
+    def __delitem__(self, key):
+        del self._store[key]
+        self._client.delete(key)
+
+
 class ABSStore(MutableMapping):
     """Storage class using Azure Blob Storage (ABS).
 

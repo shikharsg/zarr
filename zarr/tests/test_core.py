@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover
 
 from zarr.storage import (DirectoryStore, init_array, init_group, NestedDirectoryStore,
                           DBMStore, LMDBStore, SQLiteStore, ABSStore, atexit_rmtree,
-                          atexit_rmglob, LRUStoreCache)
+                          atexit_rmglob, LRUStoreCache, LRUStoreMemcache)
 from zarr.core import Array
 from zarr.errors import PermissionError
 from zarr.compat import PY2, text_type, binary_type, zip_longest
@@ -2241,6 +2241,24 @@ class TestArrayWithStoreCache(TestArray):
     @staticmethod
     def create_array(read_only=False, **kwargs):
         store = LRUStoreCache(dict(), max_size=None)
+        kwargs.setdefault('compressor', Zlib(level=1))
+        cache_metadata = kwargs.pop('cache_metadata', True)
+        cache_attrs = kwargs.pop('cache_attrs', True)
+        init_array(store, **kwargs)
+        return Array(store, read_only=read_only, cache_metadata=cache_metadata,
+                     cache_attrs=cache_attrs)
+
+    def test_store_has_bytes_values(self):
+        # skip as the cache has no control over how the store provides values
+        pass
+
+
+class TestArrayWithMemcache(TestArray):
+
+    @staticmethod
+    def create_array(read_only=False, **kwargs):
+        store = LRUStoreMemcache(dict(), server=('localhost', 11211))
+        store.clear()
         kwargs.setdefault('compressor', Zlib(level=1))
         cache_metadata = kwargs.pop('cache_metadata', True)
         cache_attrs = kwargs.pop('cache_attrs', True)

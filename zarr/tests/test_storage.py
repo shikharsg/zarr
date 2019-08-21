@@ -41,7 +41,8 @@ from zarr.storage import (init_array, array_meta_key, attrs_key, DictStore, Memo
                           getsize, migrate_1to2, TempStore, atexit_rmtree,
                           NestedDirectoryStore, default_compressor, DBMStore,
                           LMDBStore, SQLiteStore, ABSStore, atexit_rmglob, LRUStoreCache,
-                          ConsolidatedMetadataStore, MongoDBStore, RedisStore)
+                          ConsolidatedMetadataStore, MongoDBStore, RedisStore,
+                          LRUStoreMemcache)
 from zarr.meta import (decode_array_metadata, encode_array_metadata, ZARR_FORMAT,
                        decode_group_metadata, encode_group_metadata)
 from zarr.compat import PY2
@@ -1354,6 +1355,21 @@ class TestLRUStoreCache(StoreTests, unittest.TestCase):
         assert keys == sorted(store)
         assert 1 == store.counter['__iter__']
 
+
+class TestLRUMemcache(StoreTests, unittest.TestCase):
+
+    def create_store(self):
+        store = LRUStoreMemcache(dict(), server=('localhost', 11211))
+        store.clear()
+        return store
+
+    # cache size will be decided by the memcached instance
+    def test_cache_values_max_size(self):
+        pass
+
+    # keys are not cached
+    def test_cache_keys(self):
+        pass
 
 def test_getsize():
     store = dict()
