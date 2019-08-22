@@ -1953,7 +1953,7 @@ class LRUStoreMemcache(MutableMapping):
         value = self._client.get(key)
         if value is None:
             value = self._store[key]
-            self._client.set(key, ensure_bytes(value))
+            self._client.add(key, ensure_bytes(value))
         return value
 
     def __setitem__(self, key, value):
