@@ -2592,3 +2592,34 @@ class LRUChunkCache(LRUMappingCache):
             raise KeyError
         with self._mutex:
             self._invalidate_value(key)
+
+
+class LRUChunkMemcache():
+
+    def __init__(self, **client_kwargs):
+        from pymemcache.client.base import Client
+        self._client = Client(**client_kwargs)
+        self._client_kwargs = client_kwargs
+        self.hits = self.misses = 0
+
+    def __getstate__(self):
+        return (self._client_kwargs, self.hits, self.misses)
+
+    def __setstate__(self, state):
+        from pymemcache.client.base import Client
+        self._client_kwargs, self.hits, self.misses = state
+        self._client = Client(**self._client_kwargs)
+
+    def clear(self):
+        self._client.flush_all()
+
+    def __getitem__(self, key):
+        value = self._client.get(key)
+        if value is None:
+            self.misses += 1
+            raise KeyError
+        self.hits += 1
+        return value
+
+    def __setitem__(self, key, value):
+        self._client.set(key, value)

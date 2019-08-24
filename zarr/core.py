@@ -725,7 +725,7 @@ class Array(object):
         # check for cached chunk
         if self._chunk_cache is not None:
             try:
-                chunk = self._chunk_cache[ckey]
+                chunk = np.frombuffer(self._chunk_cache[ckey], dtype=self._dtype).reshape(self._chunks)
             except KeyError:
                 pass
 
@@ -745,7 +745,7 @@ class Array(object):
 
             # cache decoded chunk
             if self._chunk_cache is not None:
-                self._chunk_cache[ckey] = chunk
+                self._chunk_cache[ckey] = chunk.tobytes()
 
         # handle fields
         if fields:
@@ -1524,7 +1524,7 @@ class Array(object):
             # ensure cached chunk has been round tripped through encode-decode if dtype=object
             if self.dtype == object:
                 chunk = self._decode_chunk(cdata)
-            self._chunk_cache[ckey] = chunk
+            self._chunk_cache[ckey] = chunk.tobytes()
 
     def _set_basic_selection_nd(self, selection, value, fields=None):
         # implementation of __setitem__ for array with at least one dimension
@@ -1615,7 +1615,7 @@ class Array(object):
         # check for cached chunk
         if self._chunk_cache is not None:
             try:
-                chunk = self._chunk_cache[ckey]
+                chunk = np.frombuffer(self._chunk_cache[ckey], dtype=self._dtype).reshape(self._chunks)
             except KeyError:
                 pass
 
@@ -1675,7 +1675,7 @@ class Array(object):
                 chunk = self._decode_chunk(cdata)
                 if self._chunk_cache is not None:
                     # cache the decoded chunk
-                    self._chunk_cache[ckey] = chunk
+                    self._chunk_cache[ckey] = chunk.tobytes()
 
         # select data from chunk
         if fields:
@@ -1785,7 +1785,7 @@ class Array(object):
             # ensure cached chunk has been round tripped through encode-decode if dtype=object
             if self.dtype == object:
                 chunk = self._decode_chunk(cdata)
-            self._chunk_cache[ckey] = np.copy(chunk)
+            self._chunk_cache[ckey] = np.copy(chunk).tobytes()
 
     def _chunk_key(self, chunk_coords):
         return self._key_prefix + '.'.join(map(str, chunk_coords))

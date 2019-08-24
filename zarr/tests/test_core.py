@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover
 
 from zarr.storage import (DirectoryStore, init_array, init_group, NestedDirectoryStore,
                           DBMStore, LMDBStore, SQLiteStore, ABSStore, atexit_rmtree,
-                          atexit_rmglob, LRUStoreCache, LRUChunkCache)
+                          atexit_rmglob, LRUStoreCache, LRUChunkCache, LRUChunkMemcache)
 from zarr.core import Array
 from zarr.errors import PermissionError
 from zarr.compat import PY2, text_type, binary_type, zip_longest
@@ -2343,3 +2343,30 @@ class TestArrayWithLRUChunkCache(TestArray):
             z[:] = 42
         with pytest.raises(ValueError):
             z[...] = np.array([1, 2, 3])
+
+
+class TestArrayWithLRUChunkMemcache(TestArrayWithLRUChunkCache):
+
+    @staticmethod
+    def create_array(read_only=False, **kwargs):
+        store = dict()
+        kwargs.setdefault('compressor', Zlib(level=1))
+        cache_metadata = kwargs.pop('cache_metadata', True)
+        cache_attrs = kwargs.pop('cache_attrs', True)
+        init_array(store, **kwargs)
+        cache = LRUChunkMemcache(server=('localhost', 11211))
+        cache._client.flush_all()
+        return Array(store, read_only=read_only, cache_metadata=cache_metadata,
+                     cache_attrs=cache_attrs, chunk_cache=cache)
+
+    @staticmethod
+    def create_array_with_cache(read_only=False, **kwargs):
+        store = dict()
+        kwargs.setdefault('compressor', Zlib(level=1))
+        cache_metadata = kwargs.pop('cache_metadata', True)
+        cache_attrs = kwargs.pop('cache_attrs', True)
+        init_array(store, **kwargs)
+        cache = LRUChunkMemcache(server=('localhost', 11211))
+        cache._client.flush_all()
+        return Array(store, read_only=read_only, cache_metadata=cache_metadata,
+                     cache_attrs=cache_attrs, chunk_cache=cache), cache
