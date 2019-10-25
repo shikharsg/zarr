@@ -1675,7 +1675,7 @@ class Array(object):
                 chunk = self._decode_chunk(cdata)
                 if self._chunk_cache is not None:
                     # cache the decoded chunk
-                    self._chunk_cache[ckey] = chunk.tobytes()
+                    self._chunk_cache[ckey] = ensure_bytes(chunk)
 
         # select data from chunk
         if fields:
