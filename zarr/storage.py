@@ -42,7 +42,7 @@ from zarr.errors import (MetadataError, err_bad_compressor, err_contains_array,
 from zarr.meta import encode_array_metadata, encode_group_metadata
 from zarr.util import (buffer_size, json_loads, nolock, normalize_chunks,
                        normalize_dtype, normalize_fill_value, normalize_order,
-                       normalize_shape, normalize_storage_path)
+                       normalize_shape, normalize_storage_path, json_dumps)
 
 __doctest_requires__ = {
     ('RedisStore', 'RedisStore.*'): ['redis'],
@@ -2449,3 +2449,79 @@ class ConsolidatedMetadataStore(MutableMapping):
 
     def listdir(self, path):
         return listdir(self.meta_store, path)
+
+
+def _is_zarr_key(key):
+    return (key.endswith('.zarray') or key.endswith('.zgroup') or
+            key.endswith('.zattrs'))
+
+
+class MemcachedBase(MutableMapping):
+    def __init__(self, **client_kwargs):
+        from pymemcache.client.base import Client
+
+        self._client = Client(**client_kwargs)
+        self._client_kwargs = client_kwargs
+
+    def __getitem__(self, key):
+        value = self._client.get(key)
+        if value is None:
+            raise KeyError
+        return value
+
+    def __setitem__(self, key, value):
+        self._client.set(key, value)
+
+    def __delitem__(self, key):
+        deleted = self._client.delete(key, noreply=False)
+        if not deleted:
+            raise KeyError(key)
+
+    def clear(self):
+        self._client.flush_all()
+
+
+class WritableConsolidatedMetadataStore(ConsolidatedMetadataStore):
+
+    def __init__(self, store, metadata_key='.zmetadata'):
+        self.store = store
+        self._metadata_key = metadata_key
+
+        # retrieve consolidated metadata
+        self._meta = self._get_metadata()
+        self.meta_store = self._meta['metadata']
+
+        # check format of consolidated metadata
+        consolidated_format = self._meta.get('zarr_consolidated_format', None)
+        if consolidated_format != 1:
+            raise MetadataError('unsupported zarr consolidated metadata format: %s' %
+                                consolidated_format)
+
+
+    def _get_metadata(self):
+        meta = self.store[self._metadata_key]
+        if meta is None:
+            return {
+                'zarr_consolidated_format': 1,
+                'metadata': dict(),
+            }
+        else:
+            return json_loads(meta)
+
+    def _update_metadata(self):
+        self.store[self._metadata_key] = json_dumps(self._meta)
+
+    def __delitem__(self, key):
+        if _is_zarr_key(key):
+            del self.meta_store[key]
+            self._update_metadata()
+        super().__delitem__(key)
+
+    def __setitem__(self, key, value):
+        def _is_zarr_key(key):
+            self.meta_store[key] = value
+            self._update_metadata()
+        super().__setitem__(key, value)
+
+
+MemcachedStore = WritableConsolidatedMetadataStore(MemcachedBase)

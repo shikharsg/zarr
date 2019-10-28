@@ -1529,6 +1529,12 @@ class TestABSStore(StoreTests, unittest.TestCase):
         store.rmdir()
         return store
 
+from zarr.storage import MemcachedStore
+
+class TestMemcachedStore(StoreTests):
+    def create_store(self):
+        pass
+
 
 class TestConsolidatedMetadataStore(unittest.TestCase):
 
