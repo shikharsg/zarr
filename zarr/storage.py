@@ -2456,7 +2456,7 @@ def _is_zarr_key(key):
             key.endswith('.zattrs'))
 
 
-class MemcachedBase(MutableMapping):
+class MemcachedBase(object):
     def __init__(self, **client_kwargs):
         from pymemcache.client.base import Client
 
@@ -2497,16 +2497,15 @@ class WritableConsolidatedMetadataStore(ConsolidatedMetadataStore):
             raise MetadataError('unsupported zarr consolidated metadata format: %s' %
                                 consolidated_format)
 
-
     def _get_metadata(self):
-        meta = self.store[self._metadata_key]
-        if meta is None:
+        try:
+            meta = self.store[self._metadata_key]
+            return json_loads(meta)
+        except KeyError:
             return {
                 'zarr_consolidated_format': 1,
                 'metadata': dict(),
             }
-        else:
-            return json_loads(meta)
 
     def _update_metadata(self):
         self.store[self._metadata_key] = json_dumps(self._meta)
@@ -2515,13 +2514,10 @@ class WritableConsolidatedMetadataStore(ConsolidatedMetadataStore):
         if _is_zarr_key(key):
             del self.meta_store[key]
             self._update_metadata()
-        super().__delitem__(key)
+        del self.store[key]
 
     def __setitem__(self, key, value):
         def _is_zarr_key(key):
             self.meta_store[key] = value
             self._update_metadata()
-        super().__setitem__(key, value)
-
-
-MemcachedStore = WritableConsolidatedMetadataStore(MemcachedBase)
+        self.store[key] = value
