@@ -1645,37 +1645,37 @@ class Array(object):
 
                 # look for a possible optimisation where data can be decompressed directly
                 # into destination, which avoids a memory copy
-                if (out_is_ndarray and
-                        not fields and
-                        is_contiguous_selection(out_selection) and
-                        is_total_slice(chunk_selection, self._chunks) and
-                        not self._filters and
-                        self._dtype != object):
+                # if (out_is_ndarray and
+                #         not fields and
+                #         is_contiguous_selection(out_selection) and
+                #         is_total_slice(chunk_selection, self._chunks) and
+                #         not self._filters and
+                #         self._dtype != object):
 
-                    dest = out[out_selection]
-                    write_direct = (
-                        dest.flags.writeable and (
-                            (self._order == 'C' and dest.flags.c_contiguous) or
-                            (self._order == 'F' and dest.flags.f_contiguous)
-                        )
-                    )
+                #     dest = out[out_selection]
+                #     write_direct = (
+                #         dest.flags.writeable and (
+                #             (self._order == 'C' and dest.flags.c_contiguous) or
+                #             (self._order == 'F' and dest.flags.f_contiguous)
+                #         )
+                #     )
 
-                    if write_direct:
+                #     if write_direct:
 
-                        # optimization: we want the whole chunk, and the destination is
-                        # contiguous, so we can decompress directly from the chunk
-                        # into the destination array
+                #         # optimization: we want the whole chunk, and the destination is
+                #         # contiguous, so we can decompress directly from the chunk
+                #         # into the destination array
 
-                        if self._compressor:
-                            self._compressor.decode(cdata, dest)
-                        else:
-                            if isinstance(cdata, np.ndarray):
-                                chunk = cdata.view(self._dtype)
-                            else:
-                                chunk = np.frombuffer(cdata, dtype=self._dtype)
-                            chunk = chunk.reshape(self._chunks, order=self._order)
-                            np.copyto(dest, chunk)
-                        return
+                #         if self._compressor:
+                #             self._compressor.decode(cdata, dest)
+                #         else:
+                #             if isinstance(cdata, np.ndarray):
+                #                 chunk = cdata.view(self._dtype)
+                #             else:
+                #                 chunk = np.frombuffer(cdata, dtype=self._dtype)
+                #             chunk = chunk.reshape(self._chunks, order=self._order)
+                #             np.copyto(dest, chunk)
+                #         return
 
                 # decode chunk
                 chunk = self._decode_chunk(cdata)
